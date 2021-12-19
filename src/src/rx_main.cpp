@@ -654,6 +654,7 @@ static void ICACHE_RAM_ATTR MspReceiveComplete()
         vtxSPIBandChannelIdx = MspData[8];
         vtxSPIPowerIdx = MspData[10];
         vtxSPIPitmode = MspData[11];
+        devicesTriggerEvent();
     }
 #endif
     else
