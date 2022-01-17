@@ -1048,6 +1048,7 @@ void loop()
   CheckReadyToSend();
   CheckConfigChangePending();
   DynamicPower_Update();
+  VtxPitmodeSwitchUpdate();
 
   if (Serial.available())
   {
