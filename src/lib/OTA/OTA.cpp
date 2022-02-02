@@ -4,6 +4,8 @@
  *
  * This file provides utilities for packing and unpacking the data to
  * be sent over the radio link.
+ *
+ * it has been modified by mstrens in order to support 16 full resolution channels 
  */
 
 #include "OTA.h"
@@ -122,6 +124,8 @@ static uint8_t ICACHE_RAM_ATTR HybridWideSwitchToOta(CRSF *crsf, uint8_t switchI
  * Inputs: crsf.ChannelDataIn, crsf.LinkStatistics.uplink_TX_Power
  * Outputs: Radio.TXdataBuffer
  **/
+/*
+// Original code is here below but is just put as comment for this draft version. New code for first test is below
 void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
 {
     PackChannelDataHybridCommon(Buffer, crsf);
@@ -152,6 +156,44 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRS
         // include the switch value
         value;
 }
+*/
+/* ****** this is a first draft to send 16 channels in 11 bits resolution
+ * it is just another definition of GenerateChannelDataHybridWide in order to test the concept with minimal changes
+ * in future version it could be changed in order to use a seperate Mode 
+*/
+/**
+ * 16 Channels mode packet encoding for sending over the air
+ *
+ * Each frame contains 4 channels with 11 bits resolution so it is 44 bits
+ * It remains 4 bits which become:
+ *   1 bit fot Switch[0] ; is sent on every packet after the 44 bits.
+ *   2 bits to identifies the set of channels in the frame  (0b00 = channels 1/4, 0b01= 5/8, ... 0b11 = 12/16
+ *   1 bit for the telemetry status 
+ * 
+ * Inputs: crsf.ChannelDataIn , TelemetryStatus
+ *     nonce and tlmDenom are still part of the parameters in this draft version but could be remove later on.
+ * Outputs: Radio.TXdataBuffer
+ **/
+uint8_t Full16ChannelsIdx = 0 ;
+void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
+{
+    uint8_t Idx = Full16ChannelsIdx << 2;
+    Buffer[0] = RC_DATA_PACKET & 0b11;
+    Buffer[1] = (crsf->ChannelDataIn[Idx] >> 3);
+    Buffer[2] = (((crsf->ChannelDataIn[Idx] && 0b00000111) << 5) | (crsf->ChannelDataIn[Idx + 1] >> 6) );
+    Buffer[3] = (((crsf->ChannelDataIn[Idx + 1] && 0b00111111 ) << 2) | (crsf->ChannelDataIn[Idx + 2] >> 2) );
+    Buffer[4] = (crsf->ChannelDataIn[Idx + 2] >> 1 );
+    Buffer[5] = (((crsf->ChannelDataIn[Idx + 2] && 0b00000001 ) << 7) | (crsf->ChannelDataIn[Idx + 3] >> 4) );
+    Buffer[6] = (((crsf->ChannelDataIn[Idx + 3] && 0b00001111 ) << 4) ) ; // first main bits contains remaining part of the last channel
+    Buffer[6] = Buffer[6] | CRSF_to_BIT(crsf->ChannelDataIn[4]) << 3 ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
+    Buffer[6] = Buffer[6] | ((Full16ChannelsIdx & 0b11) << 1) ; // add 2 bits to identify the groups of channels in each frame
+    Buffer[6] = Buffer[6] | (TelemetryStatus & 0b1) ; // add 1 bits to identify the groups of channels 
+    
+    Full16ChannelsIdx = (Full16ChannelsIdx + 1) & 0b11 ; // keep index in range 0...3 (because there are 4 groups)
+}
+
+
+
 
 #endif
 
@@ -235,6 +277,8 @@ bool ICACHE_RAM_ATTR UnpackChannelDataHybridSwitch8(volatile uint8_t* Buffer, CR
  * Output: crsf.PackedRCdataOut, crsf.LinkStatistics.uplink_TX_Power
  * Returns: TelemetryStatus bit
  */
+/*
+// Original code is here below but is just put as comment for this draft version. New code for first test is below
 bool ICACHE_RAM_ATTR UnpackChannelDataHybridWide(volatile uint8_t* Buffer, CRSF *crsf, uint8_t nonce, uint8_t tlmDenom)
 {
     static bool TelemetryStatus = false;
@@ -296,6 +340,69 @@ bool ICACHE_RAM_ATTR UnpackChannelDataHybridWide(volatile uint8_t* Buffer, CRSF 
 
     return TelemetryStatus;
 }
+*/
+
+/******* this is a first draft to unpack 16 channels in 11 bits resolution
+ * it is just another definition of UnpackChannelDataHybridWide in order to test the concept with minimal changes
+ * in future version it could be changed in order to use a seperate Mode and so use a different function name 
+*/
+/**
+ * Unpacking 16 Channels 
+ *
+ * Each frame OTA contains only 4 channels with 11 bits resolution so it is 44 bits
+ * 4 remaining bits are :
+ *   1 bit fot Switch[0] ; is sent on every packet after the 44 bits.
+ *   2 bits to identifies the set of channels in the frame  (0b00 = channels 1/4, 0b01= 5/8, ... 0b11 = 12/16
+ *   1 bit for the telemetry status 
+ * 
+ * Inputs: crsf.ChannelDataIn , TelemetryStatus
+ *     nonce and tlmDenom are still part of the parameters in this draft version but could be remove later on.
+ * Outputs: Radio.TXdataBuffer ; the function returns the telemetry bit 
+ **/
+bool ICACHE_RAM_ATTR UnpackChannelDataHybridWide(volatile uint8_t* Buffer, CRSF *crsf, uint8_t nonce, uint8_t tlmDenom)
+{
+    static bool TelemetryStatus = Buffer[6] & 0b1; // last bit is always the telemetry acknowledgment 
+    const uint8_t ChannelGroup = (Buffer[6] & 0b00000110 ) >> 1; // 2 bits iedentify the group of channels
+    
+    const uint16_t Channel1of4 = (Buffer[1] << 3) | ((Buffer[2] & 0b11100000) >> 5);
+    const uint16_t Channel2of4 = ((Buffer[2] & 0b00011111 ) << 6) | ((Buffer[3] & 0b11111100) >> 2);
+    const uint16_t Channel3of4 = ((Buffer[3] & 0b00000011 ) << 9) | (Buffer[4] << 1) | ((Buffer[5] & 0b10000000) >> 7);
+    const uint16_t Channel4of4 = (Buffer[7] << 3) | ((Buffer[5] & 0b00000011) << 1);
+    
+    switch (ChannelGroup) {
+        case 0:
+            crsf->PackedRCdataOut.ch0 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch1 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch2 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch3 = Channel4of4 ;
+            break ;
+        case 1:
+            crsf->PackedRCdataOut.ch4 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch5 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch6 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch7 = Channel4of4 ;
+            break ;
+        case 2:
+            crsf->PackedRCdataOut.ch8 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch9 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch10 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch11 = Channel4of4 ;
+            break ;
+        case 3:
+            crsf->PackedRCdataOut.ch12 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch13 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch14 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch15 = Channel4of4 ;
+            break ;
+    }
+    
+    // The low latency switch (AUX1) is present in each packet (for compatibility reason with existing code - at least at this stage)
+    crsf->PackedRCdataOut.ch4 = BIT_to_CRSF((Buffer[6] & 0b1000) >> 3);
+    return TelemetryStatus;
+}
+
+
+
 #endif
 
 OtaSwitchMode_e OtaSwitchModeCurrent;
@@ -316,14 +423,14 @@ void OtaSetSwitchMode(OtaSwitchMode_e switchMode)
     case smHybridWide:
         #if defined(TARGET_TX) || defined(UNIT_TEST)
         PackChannelData = &GenerateChannelDataHybridWide;
+        //PackChannelData = &GenerateChannelData16Channels;
         #endif
         #if defined(TARGET_RX) || defined(UNIT_TEST)
         UnpackChannelData = &UnpackChannelDataHybridWide;
+        //UnpackChannelData = &UnpackChannelData16Channels;
         #endif
         break;
     }
 
     OtaSwitchModeCurrent = switchMode;
 }
-
-
