@@ -4,8 +4,6 @@
  *
  * This file provides utilities for packing and unpacking the data to
  * be sent over the radio link.
- *
- * it has been modified by mstrens in order to support 16 full resolution channels 
  */
 
 #include "OTA.h"
@@ -56,6 +54,32 @@ static uint8_t Hybrid8NextSwitchIndex;
 #if defined(UNIT_TEST)
 void OtaSetHybrid8NextSwitchIndex(uint8_t idx) { Hybrid8NextSwitchIndex = idx; }
 #endif
+
+// here the new code ; it is just a copy of the code for Hybidwide
+// ***************************************************************
+// 
+uint8_t Full16ChannelsIdx = 0 ;
+
+
+void ICACHE_RAM_ATTR GenerateChannelDataHybrid8(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
+{
+    uint8_t Idx = Full16ChannelsIdx << 2;
+    Buffer[0] = RC_DATA_PACKET & 0b11;
+    Buffer[1] = (crsf->ChannelDataIn[Idx] >> 3);
+    Buffer[2] = (((crsf->ChannelDataIn[Idx] && 0b00000111) << 5) | (crsf->ChannelDataIn[Idx + 1] >> 6) );
+    Buffer[3] = (((crsf->ChannelDataIn[Idx + 1] && 0b00111111 ) << 2) | (crsf->ChannelDataIn[Idx + 2] >> 2) );
+    Buffer[4] = (crsf->ChannelDataIn[Idx + 2] >> 1 );
+    Buffer[5] = (((crsf->ChannelDataIn[Idx + 2] && 0b00000001 ) << 7) | (crsf->ChannelDataIn[Idx + 3] >> 4) );
+    Buffer[6] = (((crsf->ChannelDataIn[Idx + 3] && 0b00001111 ) << 4) ) ; // first main bits contains remaining part of the last channel
+    Buffer[6] = Buffer[6] | (CRSF_to_BIT(crsf->ChannelDataIn[4]) << 3) ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
+    Buffer[6] = Buffer[6] | ((Full16ChannelsIdx & 0b11) << 1) ; // add 2 bits to identify the groups of channels in each frame
+    Buffer[6] = Buffer[6] | (TelemetryStatus & 0b1) ; // add 1 bits to identify the groups of channels 
+    
+    Full16ChannelsIdx = (Full16ChannelsIdx + 1) & 0b11 ; // keep index in range 0...3 (because there are 4 groups)
+}
+
+/*
+// here the original code 
 void ICACHE_RAM_ATTR GenerateChannelDataHybrid8(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
 {
     PackChannelDataHybridCommon(Buffer, crsf);
@@ -97,6 +121,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid8(volatile uint8_t* Buffer, CRSF *
     // update the sent value
     Hybrid8NextSwitchIndex = (bitclearedSwitchIndex + 1) % 7;
 }
+*/
 
 /**
  * Return the OTA value respresentation of the switch contained in ChannelDataIn
@@ -174,7 +199,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRS
  *     nonce and tlmDenom are still part of the parameters in this draft version but could be remove later on.
  * Outputs: Radio.TXdataBuffer
  **/
-uint8_t Full16ChannelsIdx = 0 ;
+
 void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
 {
     uint8_t Idx = Full16ChannelsIdx << 2;
@@ -185,7 +210,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRS
     Buffer[4] = (crsf->ChannelDataIn[Idx + 2] >> 1 );
     Buffer[5] = (((crsf->ChannelDataIn[Idx + 2] && 0b00000001 ) << 7) | (crsf->ChannelDataIn[Idx + 3] >> 4) );
     Buffer[6] = (((crsf->ChannelDataIn[Idx + 3] && 0b00001111 ) << 4) ) ; // first main bits contains remaining part of the last channel
-    Buffer[6] = Buffer[6] | CRSF_to_BIT(crsf->ChannelDataIn[4]) << 3 ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
+    Buffer[6] = Buffer[6] | (CRSF_to_BIT(crsf->ChannelDataIn[4]) << 3) ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
     Buffer[6] = Buffer[6] | ((Full16ChannelsIdx & 0b11) << 1) ; // add 2 bits to identify the groups of channels in each frame
     Buffer[6] = Buffer[6] | (TelemetryStatus & 0b1) ; // add 1 bits to identify the groups of channels 
     
@@ -211,6 +236,51 @@ static void ICACHE_RAM_ATTR UnpackChannelDataHybridCommon(volatile uint8_t* Buff
     crsf->PackedRCdataOut.ch3 = (Buffer[4] << 3) | ((Buffer[5] & 0b00000011) << 1);
 }
 
+// this is new code ; it is just a copy of HybridWide code 
+bool ICACHE_RAM_ATTR UnpackChannelDataHybridSwitch8(volatile uint8_t* Buffer, CRSF *crsf, uint8_t nonce, uint8_t tlmDenom)
+{
+    static bool TelemetryStatus = Buffer[6] & 0b1; // last bit is always the telemetry acknowledgment 
+    const uint8_t ChannelGroup = (Buffer[6] & 0b00000110 ) >> 1; // 2 bits iedentify the group of channels
+    
+    const uint16_t Channel1of4 = (Buffer[1] << 3) | ((Buffer[2] & 0b11100000) >> 5);
+    const uint16_t Channel2of4 = ((Buffer[2] & 0b00011111 ) << 6) | ((Buffer[3] & 0b11111100) >> 2);
+    const uint16_t Channel3of4 = ((Buffer[3] & 0b00000011 ) << 9) | (Buffer[4] << 1) | ((Buffer[5] & 0b10000000) >> 7);
+    const uint16_t Channel4of4 = (Buffer[7] << 3) | ((Buffer[5] & 0b00000011) << 1);
+    
+    switch (ChannelGroup) {
+        case 0:
+            crsf->PackedRCdataOut.ch0 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch1 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch2 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch3 = Channel4of4 ;
+            break ;
+        case 1:
+            crsf->PackedRCdataOut.ch4 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch5 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch6 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch7 = Channel4of4 ;
+            break ;
+        case 2:
+            crsf->PackedRCdataOut.ch8 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch9 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch10 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch11 = Channel4of4 ;
+            break ;
+        case 3:
+            crsf->PackedRCdataOut.ch12 = Channel1of4 ;
+            crsf->PackedRCdataOut.ch13 = Channel2of4 ;
+            crsf->PackedRCdataOut.ch14 = Channel3of4 ;
+            crsf->PackedRCdataOut.ch15 = Channel4of4 ;
+            break ;
+    }
+    
+    // The low latency switch (AUX1) is present in each packet (for compatibility reason with existing code - at least at this stage)
+    crsf->PackedRCdataOut.ch4 = BIT_to_CRSF((Buffer[6] & 0b1000) >> 3);
+    return TelemetryStatus;
+}
+
+
+// this is original code. I just put it as comment.
 /**
  * Hybrid switches decoding of over the air data
  *
@@ -222,6 +292,7 @@ static void ICACHE_RAM_ATTR UnpackChannelDataHybridCommon(volatile uint8_t* Buff
  * Output: crsf->PackedRCdataOut
  * Returns: TelemetryStatus bit
  */
+/*
 bool ICACHE_RAM_ATTR UnpackChannelDataHybridSwitch8(volatile uint8_t* Buffer, CRSF *crsf, uint8_t nonce, uint8_t tlmDenom)
 {
     const uint8_t switchByte = Buffer[6];
@@ -264,6 +335,8 @@ bool ICACHE_RAM_ATTR UnpackChannelDataHybridSwitch8(volatile uint8_t* Buffer, CR
     // TelemetryStatus bit
     return switchByte & (1 << 7);
 }
+*/
+
 
 /**
  * HybridWide switches decoding of over the air data
