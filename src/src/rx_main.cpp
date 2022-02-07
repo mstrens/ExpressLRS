@@ -7,6 +7,7 @@
 SX127xDriver Radio;
 #elif defined(Regulatory_Domain_ISM_2400)
 #include "SX1280Driver.h"
+#include "LBT.h"
 SX1280Driver Radio;
 #else
 #error "Radio configuration is not valid!"
@@ -298,6 +299,10 @@ bool ICACHE_RAM_ATTR HandleSendTelemetryResponse()
         return false; // don't bother sending tlm if disconnected or TLM is off
     }
 
+#if defined(Regulatory_Domain_EU_CE_2400)
+    BeginClearChannelAssessment();
+#endif
+
     alreadyTLMresp = true;
     Radio.TXdataBuffer[0] = TLM_PACKET;
 
@@ -342,7 +347,12 @@ bool ICACHE_RAM_ATTR HandleSendTelemetryResponse()
     Radio.TXdataBuffer[0] |= (crc >> 6) & 0b11111100;
     Radio.TXdataBuffer[7] = crc & 0xFF;
 
-    Radio.TXnb();
+#if defined(Regulatory_Domain_EU_CE_2400)
+    if (ChannelIsClear())
+#endif
+    {
+        Radio.TXnb();
+    }
     return true;
 }
 
@@ -507,6 +517,14 @@ static void ICACHE_RAM_ATTR updateDiversity()
 
 void ICACHE_RAM_ATTR HWtimerCallbackTock()
 {
+#if defined(Regulatory_Domain_EU_CE_2400)
+    // Emulate that TX just happened, even if it didn't because channel is not clear
+    if(!LBTSuccessCalc.currentIsSet())
+    {
+        Radio.TXdoneCallback();
+    }
+#endif
+
     PFDloop.intEvent(micros()); // our internal osc just fired
 
     updateDiversity();
@@ -850,18 +868,25 @@ static void setupSerial()
 #ifdef PLATFORM_STM32
 #if defined(TARGET_R9SLIMPLUS_RX)
     CRSF_RX_SERIAL.setRx(GPIO_PIN_RCSIGNAL_RX);
+    #if (!defined(USE_SBUS_ON_RX))
     CRSF_RX_SERIAL.begin(RCVR_UART_BAUD);
-
+    #else
+    CRSF_RX_SERIAL.begin(100000, SERIAL_8E2 );
+    #endif
     CRSF_TX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_TX);
 #else /* !TARGET_R9SLIMPLUS_RX */
     CRSF_TX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_TX);
     CRSF_TX_SERIAL.setRx(GPIO_PIN_RCSIGNAL_RX);
-#endif /* TARGET_R9SLIMPLUS_RX */
+#endif /* TARGET_R9SLIMPLUS_RX */ 
 #if defined(TARGET_RX_GHOST_ATTO_V1)
     // USART1 is used for RX (half duplex)
     CRSF_RX_SERIAL.setHalfDuplex();
     CRSF_RX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_RX);
+    #if (!defined(USE_SBUS_ON_RX))
     CRSF_RX_SERIAL.begin(RCVR_UART_BAUD);
+    #else
+    CRSF_RX_SERIAL.begin(100000, SERIAL_8E2 );
+    #endif
     CRSF_RX_SERIAL.enableHalfDuplexRx();
 
     // USART2 is used for TX (half duplex)
@@ -870,17 +895,29 @@ static void setupSerial()
     CRSF_TX_SERIAL.setRx((PinName)NC);
     CRSF_TX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_TX);
 #endif /* TARGET_RX_GHOST_ATTO_V1 */
+    #if (!defined(USE_SBUS_ON_RX))
     CRSF_TX_SERIAL.begin(RCVR_UART_BAUD);
+    #else
+    CRSF_TX_SERIAL.begin(100000, SERIAL_8E2);
+    #endif
 #endif /* PLATFORM_STM32 */
 
 #if defined(TARGET_RX_FM30_MINI)
     Serial.setRx(GPIO_PIN_DEBUG_RX);
     Serial.setTx(GPIO_PIN_DEBUG_TX);
+    #if (!defined(USE_SBUS_ON_RX))
     Serial.begin(RCVR_UART_BAUD); // Same baud as CRSF for simplicity
+    #else
+    Serial.begin(100000, SERIAL_8E2);
+    #endif
 #endif
 
 #if defined(PLATFORM_ESP8266)
+    #if (!defined(USE_SBUS_ON_RX))
     Serial.begin(RCVR_UART_BAUD);
+    #else
+    Serial.begin(1000000, SERIAL_8E2);
+    #endif
     #if defined(RCVR_INVERT_TX)
     USC0(UART0) |= BIT(UCTXI);
     #endif
@@ -992,6 +1029,10 @@ static void setupRadio()
     // Set transmit power to maximum
     POWERMGNT.setPower(MaxPower);
 
+#if defined(Regulatory_Domain_EU_CE_2400)
+    LBTEnabled = (MaxPower > PWR_10mW);
+#endif
+
     Radio.RXdoneCallback = &RXdoneISR;
     Radio.TXdoneCallback = &TXdoneISR;
 
@@ -1054,6 +1095,7 @@ static void servosUpdate(unsigned long now)
 #if defined(GPIO_PIN_PWM_OUTPUTS)
     // The ESP waveform generator is nice because it doesn't change the value
     // mid-cycle, but it does busywait if there's already a change queued.
+
     // Updating every 20ms minimizes the amount of waiting (0-800us cycling
     // after it syncs up) where 19ms always gets a 1000-1800us wait cycling
     static uint32_t lastUpdate;
