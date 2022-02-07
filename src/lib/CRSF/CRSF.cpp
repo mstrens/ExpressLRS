@@ -830,7 +830,9 @@ bool CRSF::RXhandleUARTout()
             uint8_t OutData[OutPktLen];
             SerialOutFIFO.popBytes(OutData, OutPktLen);
             interrupts();
+            #if (!defined(USE_SBUS_ON_RX)) // just discard the packet when CRSF TX UART is used for SBUS
             this->_dev->write(OutData, OutPktLen); // write the packet out
+            #endif 
             return true;
         }
     }
@@ -864,6 +866,7 @@ void ICACHE_RAM_ATTR CRSF::sendLinkStatisticsToFC()
 void ICACHE_RAM_ATTR CRSF::sendRCFrameToFC()
 {
 #if !defined(CRSF_RCVR_NO_SERIAL) && !defined(DEBUG_CRSF_NO_OUTPUT)
+    #if (!defined(USE_SBUS_ON_RX))
     constexpr uint8_t outBuffer[] = {
         // No need for length prefix as we aren't using the FIFO
         CRSF_ADDRESS_FLIGHT_CONTROLLER,
@@ -879,6 +882,9 @@ void ICACHE_RAM_ATTR CRSF::sendRCFrameToFC()
     this->_dev->write(outBuffer, sizeof(outBuffer));
     this->_dev->write((byte *)&PackedRCdataOut, RCframeLength);
     this->_dev->write(crc);
+    #else // generate the SBUS packet based on ???? 
+    sendRCFrameToSbus() ;
+    #endif
 #endif // CRSF_RCVR_NO_SERIAL
 }
 
@@ -893,6 +899,23 @@ void ICACHE_RAM_ATTR CRSF::sendMSPFrameToFC(uint8_t* data)
     }
 #endif // CRSF_RCVR_NO_SERIAL
 }
+
+#if (defined(USE_SBUS_ON_RX))
+void ICACHE_RAM_ATTR CRSF::sendRCFrameToSbus()
+{
+static uint32_t lastSendSbusPacket = 0 ;
+// we send only one packet every 9000 usec
+uint32_t SendSbusPacket = millis() ;
+if ( ( SendSbusPacket - lastSendSbusPacket ) > 9 ) 
+    {
+        lastSendSbusPacket = SendSbusPacket ;
+        this->_dev->write( (uint8_t) 0xF0 ); // start byte
+        this->_dev->write((byte *)&PackedRCdataOut, RCframeLength); // 16 channels in 11 bits (packed)
+        this->_dev->write( (uint8_t) 0x00 ); // 2 more channels and fail safe are not supported in this version
+        this->_dev->write( (uint8_t) 0x04 ); // end byte
+     }
+}
+#endif
 
 /**
  * @brief   Get encoded channel position from PackedRCdataOut
@@ -948,3 +971,7 @@ void CRSF::SetExtendedHeaderAndCrc(uint8_t *frame, uint8_t frameType, uint8_t fr
 
     frame[header->frame_size + CRSF_FRAME_NOT_COUNTED_BYTES - 1] = crc;
 }
+
+#if defined(DEBUG_ERROR)
+    #error This is a test
+#endif    
