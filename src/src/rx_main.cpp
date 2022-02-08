@@ -850,18 +850,25 @@ static void setupSerial()
 #ifdef PLATFORM_STM32
 #if defined(TARGET_R9SLIMPLUS_RX)
     CRSF_RX_SERIAL.setRx(GPIO_PIN_RCSIGNAL_RX);
+    #if (!defined(USE_SBUS_ON_RX))
     CRSF_RX_SERIAL.begin(RCVR_UART_BAUD);
-
+    #else
+    CRSF_RX_SERIAL.begin(100000, SERIAL_8E2 );
+    #endif
     CRSF_TX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_TX);
 #else /* !TARGET_R9SLIMPLUS_RX */
     CRSF_TX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_TX);
     CRSF_TX_SERIAL.setRx(GPIO_PIN_RCSIGNAL_RX);
-#endif /* TARGET_R9SLIMPLUS_RX */
+#endif /* TARGET_R9SLIMPLUS_RX */ 
 #if defined(TARGET_RX_GHOST_ATTO_V1)
     // USART1 is used for RX (half duplex)
     CRSF_RX_SERIAL.setHalfDuplex();
     CRSF_RX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_RX);
+    #if (!defined(USE_SBUS_ON_RX))
     CRSF_RX_SERIAL.begin(RCVR_UART_BAUD);
+    #else
+    CRSF_RX_SERIAL.begin(100000, SERIAL_8E2 );
+    #endif
     CRSF_RX_SERIAL.enableHalfDuplexRx();
 
     // USART2 is used for TX (half duplex)
@@ -870,17 +877,29 @@ static void setupSerial()
     CRSF_TX_SERIAL.setRx((PinName)NC);
     CRSF_TX_SERIAL.setTx(GPIO_PIN_RCSIGNAL_TX);
 #endif /* TARGET_RX_GHOST_ATTO_V1 */
+    #if (!defined(USE_SBUS_ON_RX))
     CRSF_TX_SERIAL.begin(RCVR_UART_BAUD);
+    #else
+    CRSF_TX_SERIAL.begin(100000, SERIAL_8E2);
+    #endif
 #endif /* PLATFORM_STM32 */
 
 #if defined(TARGET_RX_FM30_MINI)
     Serial.setRx(GPIO_PIN_DEBUG_RX);
     Serial.setTx(GPIO_PIN_DEBUG_TX);
+    #if (!defined(USE_SBUS_ON_RX))
     Serial.begin(RCVR_UART_BAUD); // Same baud as CRSF for simplicity
+    #else
+    Serial.begin(100000, SERIAL_8E2);
+    #endif
 #endif
 
 #if defined(PLATFORM_ESP8266)
+    #if (!defined(USE_SBUS_ON_RX))
     Serial.begin(RCVR_UART_BAUD);
+    #else
+    Serial.begin(1000000, SERIAL_8E2);
+    #endif
     #if defined(RCVR_INVERT_TX)
     USC0(UART0) |= BIT(UCTXI);
     #endif
@@ -1054,6 +1073,7 @@ static void servosUpdate(unsigned long now)
 #if defined(GPIO_PIN_PWM_OUTPUTS)
     // The ESP waveform generator is nice because it doesn't change the value
     // mid-cycle, but it does busywait if there's already a change queued.
+
     // Updating every 20ms minimizes the amount of waiting (0-800us cycling
     // after it syncs up) where 19ms always gets a 1000-1800us wait cycling
     static uint32_t lastUpdate;

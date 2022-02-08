@@ -106,14 +106,18 @@ public:
     static uint32_t ICACHE_RAM_ATTR GetRCdataLastRecv();
     static void ICACHE_RAM_ATTR updateSwitchValues();
     static void ICACHE_RAM_ATTR GetChannelDataIn();
-    #endif
+    #endif // end CRSF_TX_MODULE
 
     #ifdef CRSF_RX_MODULE
     bool RXhandleUARTout();
     void ICACHE_RAM_ATTR sendRCFrameToFC();
     void ICACHE_RAM_ATTR sendMSPFrameToFC(uint8_t* data);
     void sendLinkStatisticsToFC();
+    #if (defined(USE_SBUS_ON_RX))
+    void ICACHE_RAM_ATTR sendRCFrameToSbus();
     #endif
+
+    #endif // end CRSF_RX_MODULE
 
 
     /////////////////////////////////////////////////////////////

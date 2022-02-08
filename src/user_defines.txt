@@ -18,7 +18,7 @@
 
 # Domain is used to define correct frequency band for 900MHz hardware.
 #-DRegulatory_Domain_AU_915
-#-DRegulatory_Domain_EU_868
+-DRegulatory_Domain_EU_868
 #-DRegulatory_Domain_IN_866
 #-DRegulatory_Domain_AU_433
 #-DRegulatory_Domain_EU_433
@@ -107,3 +107,7 @@
 
 # These debugging options send extra information to BetaFlight in the LinkStatistics packet
 #-DDEBUG_BF_LINK_STATS
+
+-DUSE_HYBRID_MODE_FOR_10_CHANNELS
+-DUSE_HYBRIDWIDE_MODE_FOR_10_CHANNELS
+-DUSE_SBUS_ON_RX
