@@ -944,17 +944,17 @@ void ICACHE_RAM_ATTR CRSF::sendMSPFrameToFC(uint8_t* data)
 #if (defined(USE_SBUS_ON_RX))
 void ICACHE_RAM_ATTR CRSF::sendRCFrameToSbus()
 {
-static uint32_t lastSendSbusPacket = 0 ;
-// we send only one packet every 9000 usec
-uint32_t SendSbusPacket = millis() ;
-if ( ( SendSbusPacket - lastSendSbusPacket ) > 9 ) 
-    {
-        lastSendSbusPacket = SendSbusPacket ;
-        this->_dev->write( (uint8_t) 0xF0 ); // start byte
-        this->_dev->write((byte *)&PackedRCdataOut, RCframeLength); // 16 channels in 11 bits (packed)
-        this->_dev->write( (uint8_t) 0x00 ); // 2 more channels and fail safe are not supported in this version
-        this->_dev->write( (uint8_t) 0x04 ); // end byte
-     }
+    static uint32_t lastSendSbusPacket = 0 ;
+    // we send only one packet every 9000 usec
+    uint32_t sendSbusPacketMillis = millis() ;
+    if ( ( sendSbusPacketMillis - lastSendSbusPacket ) > 9 ) 
+        {
+            lastSendSbusPacket = sendSbusPacketMillis ;
+            this->_dev->write( (uint8_t) 0xF0 ); // start byte
+            this->_dev->write((byte *)&PackedRCdataOut, RCframeLength); // 16 channels in 11 bits (packed)
+            this->_dev->write( (uint8_t) 0x00 ); // 2 more channels and fail safe are not supported in this version
+            this->_dev->write( (uint8_t) 0x04 ); // end byte
+        }
 }
 #endif
 
