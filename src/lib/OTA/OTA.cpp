@@ -478,33 +478,33 @@ void OtaSetSwitchMode(OtaSwitchMode_e switchMode)
     case smHybrid:
     default:
         #if defined(TARGET_TX) || defined(UNIT_TEST)
-            #if (!defined USE_HYBRID_MODE_FOR_10_CHANNELS)
+            #if !defined(USE_HYBRID_MODE_FOR_10_CHANNELS)
         PackChannelData = &GenerateChannelDataHybrid8;
             #else
-        PackChannelData = &GenerateChannelDataHybrid16;
+        PackChannelData = &GenerateChannelDataHybrid10;
             #endif
         #endif
         #if defined(TARGET_RX) || defined(UNIT_TEST)
-            #if (!defined USE_HYBRID_MODE_FOR_10_CHANNELS)
+            #if !defined(USE_HYBRID_MODE_FOR_10_CHANNELS)
         UnpackChannelData = &UnpackChannelDataHybridSwitch8;
             #else
-        UnpackChannelData = &UnpackChannelDataHybrid16;
+        UnpackChannelData = &UnpackChannelDataHybrid10;
             #endif
         #endif
         break;
     case smHybridWide:
         #if defined(TARGET_TX) || defined(UNIT_TEST)
-            #if (!defined USE_HYBRIDWIDE_MODE_FOR_10_CHANNELS)
+            #if !defined(USE_HYBRIDWIDE_MODE_FOR_10_CHANNELS)
         PackChannelData = &GenerateChannelDataHybridWide;
             #else
-        PackChannelData = &GenerateChannelDataHybrid16;
+        PackChannelData = &GenerateChannelDataHybrid10;
             #endif
         #endif
         #if defined(TARGET_RX) || defined(UNIT_TEST)
-            #if (!defined USE_HYBRIDWIDE_MODE_FOR_10_CHANNELS)
+            #if !defined(USE_HYBRIDWIDE_MODE_FOR_10_CHANNELS)
         UnpackChannelData = &UnpackChannelDataHybridWide;
             #else
-        UnpackChannelData = &UnpackChannelDataHybrid16;
+        UnpackChannelData = &UnpackChannelDataHybrid10;
             #endif    
         #endif
         break;
