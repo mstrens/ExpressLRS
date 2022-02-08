@@ -6,6 +6,7 @@
 SX127xDriver Radio;
 #elif defined(Regulatory_Domain_ISM_2400)
 #include "SX1280Driver.h"
+#include "LBT.h"
 SX1280Driver Radio;
 #endif
 
@@ -400,7 +401,7 @@ void ICACHE_RAM_ATTR HandlePrepareForTLM()
   if (ExpressLRS_currAirRate_Modparams->TLMinterval != TLM_RATIO_NO_TLM && modresult == 0)
   {
     Radio.RXnb();
-    TelemetryRcvPhase = ttrpInReceiveMode;
+    TelemetryRcvPhase = ttrpPreReceiveGap;
   }
 }
 
@@ -474,7 +475,12 @@ void ICACHE_RAM_ATTR SendRCdataToRF()
   Radio.TXdataBuffer[0] = (Radio.TXdataBuffer[0] & 0b11) | ((crc >> 6) & 0b11111100);
   Radio.TXdataBuffer[7] = crc & 0xFF;
 
-  Radio.TXnb();
+#if defined(Regulatory_Domain_EU_CE_2400)
+  if (ChannelIsClear())
+#endif
+  {
+    Radio.TXnb();
+  }
 }
 
 /*
@@ -482,6 +488,13 @@ void ICACHE_RAM_ATTR SendRCdataToRF()
  */
 void ICACHE_RAM_ATTR timerCallbackNormal()
 {
+#if defined(Regulatory_Domain_EU_CE_2400)
+  if(!LBTSuccessCalc.currentIsSet())
+  {
+    Radio.TXdoneCallback();
+  }
+#endif
+
   // Sync OpenTX to this point
   crsf.JustSentRFpacket();
 
@@ -491,13 +504,23 @@ void ICACHE_RAM_ATTR timerCallbackNormal()
 
   // If HandleTLM has started Receive mode, TLM packet reception should begin shortly
   // Skip transmitting on this slot
-  if (TelemetryRcvPhase == ttrpInReceiveMode)
+  if (TelemetryRcvPhase == ttrpPreReceiveGap)
   {
-    TelemetryRcvPhase = ttrpTransmitting;
+    TelemetryRcvPhase = ttrpExpectingTelem;
+#if defined(Regulatory_Domain_EU_CE_2400)
+    // Use downlink LQ for LBT success ratio instead for EU/CE reg domain
+    crsf.LinkStatistics.downlink_Link_quality = LBTSuccessCalc.getLQ();
+#else
     crsf.LinkStatistics.downlink_Link_quality = LQCalc.getLQ();
+#endif
     LQCalc.inc();
     return;
   }
+  TelemetryRcvPhase = ttrpTransmitting;
+
+#if defined(Regulatory_Domain_EU_CE_2400)
+    BeginClearChannelAssessment(); // Get RSSI reading here, used also for next TX if in receiveMode.
+#endif
 
   // Do not send a stale channels packet to the RX if one has not been received from the handset
   // *Do* send data if a packet has never been received from handset and the timer is running
@@ -549,6 +572,9 @@ static void ChangeRadioParams()
   // Dynamic Power starts at MinPower and will boost if switch is set or IsArmed and disconnected
   POWERMGNT.setPower(config.GetDynamicPower() ? MinPower : (PowerLevels_e)config.GetPower());
   // TLM interval is set on the next SYNC packet
+#if defined(Regulatory_Domain_EU_CE_2400)
+  LBTEnabled = (config.GetPower() > PWR_10mW);
+#endif
 }
 
 void ICACHE_RAM_ATTR ModelUpdateReq()
@@ -573,7 +599,6 @@ static void ConfigChangeCommit()
   hwTimer.callbackTock = &timerCallbackNormal;
   devicesTriggerEvent();
 }
-
 
 static void CheckConfigChangePending()
 {
@@ -603,13 +628,15 @@ static void CheckConfigChangePending()
     while (pauseCycles--)
       timerCallbackIdle();
 #endif
+    // Prevent any other RF SPI traffic during the commit from RX or scheduled TX
     hwTimer.callbackTock = &timerCallbackIdle;
-    // If telemetry expected in the next interval, the radio is in RX mode
-    // and will skip sending the next packet when the tiemr resumes.
+    // If telemetry expected in the next interval, the radio was in RX mode
+    // and will skip sending the next packet when the timer resumes.
     // Return to normal send mode because if the skipped packet happened
     // to be on the last slot of the FHSS the skip will prevent FHSS
-    if (TelemetryRcvPhase == ttrpInReceiveMode)
+    if (TelemetryRcvPhase != ttrpTransmitting)
     {
+      Radio.SetTxIdleMode();
       TelemetryRcvPhase = ttrpTransmitting;
     }
     ConfigChangeCommit();
@@ -626,6 +653,16 @@ void ICACHE_RAM_ATTR TXdoneISR()
 {
   HandleFHSS();
   HandlePrepareForTLM();
+#if defined(Regulatory_Domain_EU_CE_2400)
+  if (TelemetryRcvPhase != ttrpPreReceiveGap)
+  {
+    // Start RX for Listen Before Talk early because it takes about 100us
+    // from RX enable to valid instant RSSI values are returned.
+    // If rx was already started by TLM prepare above, this call will let RX
+    // continue as normal.
+    BeginClearChannelAssessment();
+  }
+#endif // non-CE
   busyTransmitting = false;
 }
 
@@ -986,6 +1023,9 @@ void setup()
     // Set the pkt rate, TLM ratio, and power from the stored eeprom values
     ChangeRadioParams();
 
+#if defined(Regulatory_Domain_EU_CE_2400)
+    BeginClearChannelAssessment();
+#endif
     hwTimer.init();
     connectionState = noCrossfire;
   }
