@@ -442,7 +442,7 @@ bool ICACHE_RAM_ATTR UnpackChannelDataHybrid10(volatile uint8_t* Buffer, CRSF *c
     crsf->PackedRCdataOut.ch4 = BIT_to_CRSF((Buffer[6] & 0b100) >> 2);
     
     const uint16_t Channel1of6 = ( ((uint16_t) Buffer[1]) << 3) | ((Buffer[2] & 0b11000000) >> 5);
-    const uint16_t Channel2of6 = ((((uint16_t) Buffer[2]) & 0b00111111 ) << 2) | ((Buffer[3] & 0b11110000) >> 3);
+    const uint16_t Channel2of6 = ((((uint16_t) Buffer[2]) & 0b00111111 ) << 5) | ((Buffer[3] & 0b11110000) >> 3);
     const uint16_t Channel3of6 = ((((uint16_t) Buffer[3]) & 0b00001111 ) << 7) | ((Buffer[4] & 0b11111100) >> 1);
     const uint16_t Channel4of6 = ((((uint16_t) Buffer[4]) & 0b00000011 ) << 9) | ((Buffer[5] & 0b11111111) << 1) ;
     const uint16_t Channel6of6 = ((((uint16_t) Buffer[6]) & 0b11111000 ) << 5)  ;
