@@ -169,9 +169,9 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybridWide(volatile uint8_t* Buffer, CRS
  *     nonce and tlmDenom are still part of the parameters in this draft version but could be remove later on.
  * Outputs: Radio.TXdataBuffer
  **/
-uint8_t Full16ChannelsIdx = 0 ;
 void ICACHE_RAM_ATTR GenerateChannelDataHybrid16(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
 {
+    static uint8_t Full16ChannelsIdx = 0 ;
     uint8_t Idx = Full16ChannelsIdx << 2;
     Buffer[0] = RC_DATA_PACKET & 0b11;
     Buffer[1] = (crsf->ChannelDataIn[Idx] >> 3);
@@ -203,7 +203,8 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid16(volatile uint8_t* Buffer, CRSF 
  **/
 void ICACHE_RAM_ATTR GenerateChannelDataHybrid10(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
 {
-    uint8_t Idx = ( Full16ChannelsIdx ) ? 5 : 0 ; // index = channel -1
+    static uint8_t Full10ChannelsIdx = 0 ;
+    uint8_t Idx = ( Full10ChannelsIdx ) ? 5 : 0 ; // index = channel -1
     uint8_t IdxLowResolution = (Idx)  ? 10 : 9; // index = channel -1
     Buffer[0] = RC_DATA_PACKET & 0b11;
     Buffer[1] = (crsf->ChannelDataIn[Idx] >> 3);
@@ -213,10 +214,10 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid10(volatile uint8_t* Buffer, CRSF 
     Buffer[5] = (crsf->ChannelDataIn[Idx + 3] >> 1 );
     Buffer[6] = (crsf->ChannelDataIn[IdxLowResolution] >> 6 ) ; // first main bits contains 5 bits of channels
     Buffer[6] = Buffer[6] | (CRSF_to_BIT(crsf->ChannelDataIn[4]) << 1) ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
-    Buffer[6] = Buffer[6] | ((Full16ChannelsIdx & 0b1) << 1) ; // add 1 bits to identify the groups of channels in each frame
+    Buffer[6] = Buffer[6] | ((Full10ChannelsIdx & 0b1) << 1) ; // add 1 bits to identify the groups of channels in each frame
     Buffer[6] = Buffer[6] | (TelemetryStatus & 0b1) ; // add 1 bits for telemetry acknowlegment 
     
-    Full16ChannelsIdx = (Full16ChannelsIdx + 1) & 0b1 ; // keep index in range 0, 1 (because there are 2 groups)
+    Full10ChannelsIdx = (Full10ChannelsIdx + 1) & 0b1 ; // keep index in range 0, 1 (because there are only 2 groups)
 }
 
 
