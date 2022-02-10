@@ -950,7 +950,7 @@ void ICACHE_RAM_ATTR CRSF::sendRCFrameToSbus()
     if ( ( sendSbusPacketMillis - lastSendSbusPacket ) > 9 ) 
         {
             lastSendSbusPacket = sendSbusPacketMillis ;
-            this->_dev->write( (uint8_t) 0xF0 ); // start byte
+            this->_dev->write( (uint8_t) 0x0F ); // start byte
             this->_dev->write((byte *)&PackedRCdataOut, RCframeLength); // 16 channels in 11 bits (packed)
             this->_dev->write( (uint8_t) 0x00 ); // 2 more channels and fail safe are not supported in this version
             this->_dev->write( (uint8_t) 0x04 ); // end byte
