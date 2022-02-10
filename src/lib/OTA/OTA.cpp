@@ -213,8 +213,8 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid10(volatile uint8_t* Buffer, CRSF 
     Buffer[3] = (((crsf->ChannelDataIn[Idx + 1] & 0b00011110 ) << 3) | (crsf->ChannelDataIn[Idx + 2] >> 7) );
     Buffer[4] = (((crsf->ChannelDataIn[Idx + 2] & 0b01111110 ) << 1) | (crsf->ChannelDataIn[Idx + 3] >> 9) );
     Buffer[5] = (crsf->ChannelDataIn[Idx + 3] >> 1 );
-    Buffer[6] = (crsf->ChannelDataIn[IdxLowResolution] >> 6 ) ; // first main bits contains 5 bits of channels
-    Buffer[6] = Buffer[6] | (CRSF_to_BIT(crsf->ChannelDataIn[4]) << 1) ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
+    Buffer[6] = (crsf->ChannelDataIn[IdxLowResolution] >> 3 ) ; // first main bits contains 5 bits of channels (11 bit >> 6 <<3 ) 
+    Buffer[6] = Buffer[6] | (CRSF_to_BIT(crsf->ChannelDataIn[4]) << 2) ; // keep switch 0;  is one bit sent on every packet - intended for low latency arm/disarm
     Buffer[6] = Buffer[6] | ((Full10ChannelsIdx & 0b1) << 1) ; // add 1 bits to identify the groups of channels in each frame
     Buffer[6] = Buffer[6] | (TelemetryStatus & 0b1) ; // add 1 bits for telemetry acknowlegment 
     
