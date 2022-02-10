@@ -201,7 +201,7 @@ void ICACHE_RAM_ATTR GenerateChannelDataHybrid16(volatile uint8_t* Buffer, CRSF 
  *     nonce and tlmDenom are still part of the parameters in this draft version but could be remove later on.
  * Outputs: Radio.TXdataBuffer
  **/
-uint8_t Full10ChannelsIdx = 0 ;
+static uint8_t Full10ChannelsIdx = 0 ;
     
 void ICACHE_RAM_ATTR GenerateChannelDataHybrid10(volatile uint8_t* Buffer, CRSF *crsf, bool TelemetryStatus, uint8_t nonce, uint8_t tlmDenom)
 {
