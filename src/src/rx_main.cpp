@@ -905,7 +905,7 @@ static void setupSerial()
     #if (!defined(USE_SBUS_ON_RX))
     Serial.begin(RCVR_UART_BAUD);
     #else
-    Serial.begin(1000000, SERIAL_8E2);
+    Serial.begin(100000, SERIAL_8E2);
     #endif
     #if defined(RCVR_INVERT_TX)
     USC0(UART0) |= BIT(UCTXI);
