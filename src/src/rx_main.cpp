@@ -83,7 +83,7 @@ static Servo *Servos[SERVO_COUNT];
 static bool newChannelsAvailable;
 #endif
 #if defined(USE_SBUS_ON_RX)
-static bool newChannelsAvailableToSbus;
+static bool newChannelsAvailableToSbus = false;
 #endif
 
 /* CRSF_TX_SERIAL is used by CRSF output */
@@ -629,7 +629,7 @@ static void ICACHE_RAM_ATTR ProcessRfPacket_RC()
         #else
         crsf.sendRCFrameToFC();
         #endif
-        #if defined(GPIO_PIN_PWM_OUTPUTS)
+        #if defined(USE_SBUS_ON_RX)
         newChannelsAvailableToSbus = true;
         #endif
         
@@ -1139,8 +1139,8 @@ static void sbusUpdate(unsigned long now)
     // Sbus has to be sent once every 9msec
     // A frame is generated with last channels recieved even if connection is lost
     // this version does not supprt failsafe with predefined values 
-    static uint32_t lastSbusUpdate;
-    static bool atLeastOneSbusSent = false;  // we do not send Sbus as if we where never connected
+    static uint32_t lastSbusUpdate = 0;
+    static bool atLeastOneSbusSent = false;  // we do not send Sbus if we where never connected
     const uint32_t elapsed = now - lastSbusUpdate;
     if (elapsed < 9)
         return;
