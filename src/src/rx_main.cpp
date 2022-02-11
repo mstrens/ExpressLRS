@@ -84,6 +84,8 @@ static bool newChannelsAvailable;
 #endif
 #if defined(USE_SBUS_ON_RX)
 static bool newChannelsAvailableToSbus = false;
+uint32_t lastSbusUpdate = 0;
+bool atLeastOneSbusSent = false;  // we do not send Sbus if we where never connected
 #endif
 
 /* CRSF_TX_SERIAL is used by CRSF output */
@@ -187,10 +189,6 @@ int8_t debug4 = 0;
 
 bool InBindingMode = false;
 
-#if defined(USE_SBUS_ON_RX)
-uint32_t lastSbusUpdate = 0;
-bool atLeastOneSbusSent = false;  // we do not send Sbus if we where never connected
-#endif
 
 
 void reset_into_bootloader(void);
@@ -1153,13 +1151,13 @@ static void sbusUpdate(unsigned long now)
     {
         newChannelsAvailableToSbus = false;
         atLeastOneSbusSent = true ;
-        crsf.sendRCFrameToSbus(); 
+        crsf.sendRCFrameToSbus(false,false); 
     } 
     else
         return; // prevent updating lastUpdate
 
     // need to sample actual millis at the end to account for any
-    // waiting that happened in Servo::writeMicroseconds()
+    // waiting that happened in sendRCFRameToSbus()
     lastSbusUpdate = millis();
 #endif
 }
