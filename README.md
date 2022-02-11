@@ -10,6 +10,10 @@
 
 </center>
 
+
+## This is a fork of official ELRS project based on version 2.2.0
+Changes are explained at the end of file named user_defines.txt and where done in order to let ELRS sent 8 channels in high resolution + 2 channels in low resolution and also in order to let the RX generate a Sbus frame instead of a CRSF frame. See user_define.txt for more details
+
 ## Support ExpressLRS
 You can support ExpressLRS by contributing code, testing new features, sharing your ideas, or helping others get started. We are exceptionally grateful for those who donate their time to our passion.
 
