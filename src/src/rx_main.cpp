@@ -187,6 +187,12 @@ int8_t debug4 = 0;
 
 bool InBindingMode = false;
 
+#if defined(USE_SBUS_ON_RX)
+uint32_t lastSbusUpdate = 0;
+bool atLeastOneSbusSent = false;  // we do not send Sbus if we where never connected
+#endif
+
+
 void reset_into_bootloader(void);
 void EnterBindingMode();
 void ExitBindingMode();
@@ -1139,8 +1145,6 @@ static void sbusUpdate(unsigned long now)
     // Sbus has to be sent once every 9msec
     // A frame is generated with last channels recieved even if connection is lost
     // this version does not supprt failsafe with predefined values 
-    static uint32_t lastSbusUpdate = 0;
-    static bool atLeastOneSbusSent = false;  // we do not send Sbus if we where never connected
     const uint32_t elapsed = now - lastSbusUpdate;
     if (elapsed < 9)
         return;
