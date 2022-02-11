@@ -82,6 +82,9 @@ static constexpr uint8_t SERVO_COUNT = ARRAY_SIZE(SERVO_PINS);
 static Servo *Servos[SERVO_COUNT];
 static bool newChannelsAvailable;
 #endif
+#if defined(USE_SBUS_ON_RX)
+static bool newChannelsAvailableToSbus;
+#endif
 
 /* CRSF_TX_SERIAL is used by CRSF output */
 #if defined(TARGET_RX_FM30_MINI)
@@ -626,6 +629,10 @@ static void ICACHE_RAM_ATTR ProcessRfPacket_RC()
         #else
         crsf.sendRCFrameToFC();
         #endif
+        #if defined(GPIO_PIN_PWM_OUTPUTS)
+        newChannelsAvailableToSbus = true;
+        #endif
+        
     }
 }
 
@@ -1125,6 +1132,35 @@ static void servosUpdate(unsigned long now)
 #endif
 }
 
+
+static void sbusUpdate(unsigned long now)
+{
+#if defined(USE_SBUS_ON_RX)
+    // Sbus has to be sent once every 9msec
+    // A frame is generated with last channels recieved even if connection is lost
+    // this version does not supprt failsafe with predefined values 
+    static uint32_t lastSbusUpdate;
+    static bool atLeastOneSbusSent = false;  // we do not send Sbus as if we where never connected
+    const uint32_t elapsed = now - lastSbusUpdate;
+    if (elapsed < 9)
+        return;
+
+    if ( (newChannelsAvailableToSbus) ||  ( atLeastOneSbusSent ))
+    {
+        newChannelsAvailableToSbus = false;
+        atLeastOneSbusSent = true ;
+        crsf.sendRCFrameToSbus(); 
+    } 
+    else
+        return; // prevent updating lastUpdate
+
+    // need to sample actual millis at the end to account for any
+    // waiting that happened in Servo::writeMicroseconds()
+    lastSbusUpdate = millis();
+#endif
+}
+
+
 static void updateBindingMode()
 {
     // If the eeprom is indicating that we're not bound
@@ -1269,7 +1305,7 @@ void loop()
 
     cycleRfMode(now);
     servosUpdate(now);
-
+    sbusUpdate(now);
     uint32_t localLastValidPacket = LastValidPacket; // Required to prevent race condition due to LastValidPacket getting updated from ISR
     if ((connectionState == disconnectPending) ||
         ((connectionState == connected) && ((int32_t)ExpressLRS_currAirRate_RFperfParams->DisconnectTimeoutMs < (int32_t)(now - localLastValidPacket)))) // check if we lost conn.

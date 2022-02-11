@@ -924,7 +924,7 @@ void ICACHE_RAM_ATTR CRSF::sendRCFrameToFC()
     this->_dev->write((byte *)&PackedRCdataOut, RCframeLength);
     this->_dev->write(crc);
     #else // generate the SBUS packet based on ???? 
-    sendRCFrameToSbus() ;
+    // sendRCFrameToSbus() ; // sending Sbus has been moved in the main loop in order to send it even when there is no RC data received
     #endif
 #endif // CRSF_RCVR_NO_SERIAL
 }
